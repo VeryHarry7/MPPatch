@@ -17,15 +17,15 @@ jobs:
       - run: pacman --noconfirm -Sy sbt jdk-openjdk git mingw-w64 clang nasm rustup python3 lib32-gcc-libs lib32-glibc gcc-libs gcc
       - uses: actions-rs/toolchain@v1
         with:
-          toolchain: nightly
+          toolchain: nightly-2024-11-01
           default: true
       - uses: actions-rs/toolchain@v1
         with:
-          toolchain: nightly
+          toolchain: nightly-2024-11-01
           target: i686-pc-windows-gnu
       - uses: actions-rs/toolchain@v1
         with:
-          toolchain: nightly
+          toolchain: nightly-2024-11-01
           target: i686-unknown-linux-gnu
 
       # Initialize git
