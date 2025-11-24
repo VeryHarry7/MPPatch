@@ -56,6 +56,8 @@ object PatchBuild {
     },
     Keys.patchFiles := {
       val log = streams.value.log
+      // Ensure native binaries are built before reading them
+      Keys.buildDylibDir.value
 
       def loadFromDir(dir: File) =
         Path.allSubpaths(dir).filter(_._1.isFile).map(x => PatchFile(x._2, IO.readBytes(x._1))).toSeq
