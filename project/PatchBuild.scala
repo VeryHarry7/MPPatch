@@ -61,14 +61,7 @@ object PatchBuild {
         Path.allSubpaths(dir).filter(_._1.isFile).map(x => PatchFile(x._2, IO.readBytes(x._1))).toSeq
       val copiedFiles = loadFromDir(baseDirectory.value / "src" / "patch" / "static")
 
-      // Only build natives if they don't exist yet
-      val nativeDir = Keys.nativesDir.value
-      if (!nativeDir.exists() || nativeDir.listFiles() == null || nativeDir.listFiles().isEmpty) {
-        log.info("Native binaries not found, building them...")
-        Keys.buildDylibDir.value
-      }
-
-      val nativeDirFiles = nativeDir.listFiles()
+      val nativeDirFiles = Keys.nativesDir.value.listFiles()
       if (nativeDirFiles == null) sys.error("native-bin does not exist!")
       val patchFiles =
         for (binary <- nativeDirFiles if !binary.getName.endsWith(".build-id")) yield {
