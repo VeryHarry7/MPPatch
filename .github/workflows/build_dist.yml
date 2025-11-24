@@ -13,8 +13,24 @@ jobs:
     runs-on: ubuntu-latest
     container: archlinux/archlinux:multilib-devel
     steps:
-      # Install packages
-      - run: pacman --noconfirm -Sy sbt jdk-openjdk git mingw-w64 clang nasm rustup python3
+      # Install packages with retry logic for network issues
+      - name: Install packages with retry
+        run: |
+          # Refresh package database and add fallback mirrors
+          pacman --noconfirm -Syy || true
+
+          # Install packages with retries
+          for i in {1..3}; do
+            if pacman --noconfirm -S sbt jdk-openjdk git mingw-w64 clang nasm rustup python3 lib32-gcc-libs lib32-glibc gcc-libs gcc; then
+              echo "Package installation successful"
+              exit 0
+            fi
+            echo "Attempt $i failed, retrying..."
+            sleep 5
+          done
+
+          echo "Failed to install packages after 3 attempts"
+          exit 1
       - uses: actions-rs/toolchain@v1
         with:
           toolchain: nightly-2024-11-01
