@@ -177,7 +177,7 @@ class CivDlcBuilder(source: DataSource, patch: UIPatch) {
         textData = textFiles,
         uiFiles = Map(
           "LuaOverrides" -> prepareList(findPathTargets(assetsPath, platform, "UI")),
-          "ui/lib"       -> prepareList(libraryFiles),
+          "Runtime"      -> prepareList(libraryFiles),
           "Patches"      -> prepareList(softHookFiles),
           "Screens"      -> prepareList(newScreenFiles)
         ),
