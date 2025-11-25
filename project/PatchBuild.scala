@@ -27,63 +27,71 @@ import java.nio.charset.StandardCharsets
 import scala.xml.*
 
 object PatchBuild {
+  // Check if pre-built natives exist (evaluated at settings load time)
+  private def hasPrebuiltNatives(baseDir: File): Boolean = {
+    val prebuiltDir = baseDir / "target" / "native-bin"
+    prebuiltDir.exists() && prebuiltDir.listFiles() != null && prebuiltDir.listFiles().nonEmpty
+  }
+
   val settings = Seq(
     Keys.nativesDir := crossTarget.value / "native-bin",
-    Keys.buildDylibDir := Def.taskDyn {
-      // Check if pre-built natives exist from CI tarball (in target/native-bin)
-      val prebuiltDir = target.value / "native-bin"
+    // Only define buildDylibDir for building from source - it won't be used when pre-built natives exist
+    Keys.buildDylibDir := {
+      val dir = Keys.nativesDir.value
       val log = streams.value.log
-
-      if (prebuiltDir.exists() && prebuiltDir.listFiles() != null && prebuiltDir.listFiles().nonEmpty) {
-        log.log(Level.Info, s"Found pre-built natives in $prebuiltDir, will use those...")
-        // Return a task that just copies pre-built files (no native build dependencies)
-        Def.task {
-          val dir = Keys.nativesDir.value
-          IO.delete(dir)
-          IO.createDirectory(dir)
-          log.log(Level.Info, "Copying pre-built natives from tarball...")
-          IO.copyDirectory(prebuiltDir, dir)
-          dir
-        }
-      } else {
-        log.log(Level.Info, "No pre-built natives found, will build from source...")
-        // Return a task that builds from source (with native build dependencies)
-        Def.task {
-          val dir = Keys.nativesDir.value
-          IO.delete(dir)
-          IO.createDirectory(dir)
-          log.log(Level.Info, "Building natives from source...")
-          for (luajitBin <- LuaJITBuild.Keys.luajitFiles.value) {
-            log.log(Level.Info, s"Copying $luajitBin to output directory.")
-            IO.copyFile(luajitBin.file, dir / luajitBin.file.getName)
-          }
-          for (nativeBin <- NativePatchBuild.Keys.nativeVersions.value) {
-            log.log(Level.Info, s"Copying $nativeBin to output directory.")
-            IO.copyFile(nativeBin.file, dir / nativeBin.name)
-            IO.write(dir / s"${nativeBin.name}.build-id", nativeBin.buildId)
-          }
-          for (wrapperBin <- NativePatchBuild.Keys.win32Wrapper.value) {
-            log.log(Level.Info, s"Copying $wrapperBin to output directory.")
-            IO.copyFile(wrapperBin, dir / wrapperBin.getName)
-          }
-          dir
-        }
+      IO.delete(dir)
+      IO.createDirectory(dir)
+      log.log(Level.Info, "Building natives from source...")
+      for (luajitBin <- LuaJITBuild.Keys.luajitFiles.value) {
+        log.log(Level.Info, s"Copying $luajitBin to output directory.")
+        IO.copyFile(luajitBin.file, dir / luajitBin.file.getName)
       }
-    }.value,
+      for (nativeBin <- NativePatchBuild.Keys.nativeVersions.value) {
+        log.log(Level.Info, s"Copying $nativeBin to output directory.")
+        IO.copyFile(nativeBin.file, dir / nativeBin.name)
+        IO.write(dir / s"${nativeBin.name}.build-id", nativeBin.buildId)
+      }
+      for (wrapperBin <- NativePatchBuild.Keys.win32Wrapper.value) {
+        log.log(Level.Info, s"Copying $wrapperBin to output directory.")
+        IO.copyFile(wrapperBin, dir / wrapperBin.getName)
+      }
+      dir
+    },
     Keys.patchFiles := {
-      // Ensure buildDylibDir has run before we try to read .build-id files
-      Keys.buildDylibDir.value
-
       val log = streams.value.log
+      val nativesDir = Keys.nativesDir.value
+      val prebuiltDir = target.value / "native-bin"
+
+      // Check if pre-built natives exist from CI tarball
+      val nativeFiles: Array[File] = if (prebuiltDir.exists() && prebuiltDir.listFiles() != null && prebuiltDir.listFiles().nonEmpty) {
+        log.log(Level.Info, s"Found pre-built natives in $prebuiltDir, using those...")
+        // Copy pre-built natives to nativesDir
+        IO.delete(nativesDir)
+        IO.createDirectory(nativesDir)
+        for (file <- prebuiltDir.listFiles()) {
+          log.log(Level.Info, s"Copying pre-built native: ${file.getName}")
+          IO.copyFile(file, nativesDir / file.getName)
+        }
+        nativesDir.listFiles()
+      } else {
+        log.log(Level.Info, "No pre-built natives found, building from source...")
+        // This will trigger the native build tasks
+        Keys.buildDylibDir.value
+        nativesDir.listFiles()
+      }
+
+      if (nativeFiles == null || nativeFiles.isEmpty) {
+        sys.error(s"native-bin directory is empty! nativesDir=$nativesDir, prebuiltDir=$prebuiltDir")
+      }
+
+      log.log(Level.Info, s"Native files found: ${nativeFiles.map(_.getName).mkString(", ")}")
 
       def loadFromDir(dir: File) =
         Path.allSubpaths(dir).filter(_._1.isFile).map(x => PatchFile(x._2, IO.readBytes(x._1))).toSeq
       val copiedFiles = loadFromDir(baseDirectory.value / "src" / "patch" / "static")
 
-      val nativeDirFiles = Keys.nativesDir.value.listFiles()
-      if (nativeDirFiles == null) sys.error("native-bin does not exist!")
       val patchFiles =
-        for (binary <- nativeDirFiles if !binary.getName.endsWith(".build-id")) yield {
+        for (binary <- nativeFiles if !binary.getName.endsWith(".build-id")) yield {
           log.info(s"Found native binary file: $binary")
           PatchFile(s"native/${binary.getName}", IO.readBytes(binary))
         }
@@ -91,7 +99,7 @@ object PatchBuild {
       val versionDataInfo = InstallerResourceBuild.Keys.versionData.value.toSeq.sorted
         .map(x => s"_mpPatch.version.info[${LuaUtils.quote(x._1)}] = ${LuaUtils.quote(x._2)}")
         .mkString("\n")
-      val buildIdInfo = nativeDirFiles
+      val buildIdInfo = nativeFiles
         .filter(x => x.getName.endsWith(".build-id"))
         .sorted
         .map { x =>
