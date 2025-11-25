@@ -37,24 +37,38 @@ object PatchBuild {
 
       // copy native-patch files to the directory
       val log = streams.value.log
-      for (luajitBin <- LuaJITBuild.Keys.luajitFiles.value) {
-        log.log(Level.Info, s"Copying $luajitBin to output directory.")
-        IO.copyFile(luajitBin.file, dir / luajitBin.file.getName)
-      }
-      for (nativeBin <- NativePatchBuild.Keys.nativeVersions.value) {
-        log.log(Level.Info, s"Copying $nativeBin to output directory.")
-        IO.copyFile(nativeBin.file, dir / nativeBin.name)
-        IO.write(dir / s"${nativeBin.name}.build-id", nativeBin.buildId)
-      }
-      for (wrapperBin <- NativePatchBuild.Keys.win32Wrapper.value) {
-        log.log(Level.Info, s"Copying $wrapperBin to output directory.")
-        IO.copyFile(wrapperBin, dir / wrapperBin.getName)
+
+      // Check if pre-built natives exist from CI tarball (in target/native-bin)
+      val tarballNatives = (Keys.target.value / "mppatch_ci_natives-linux.tar.gz").exists()
+      val prebuiltDir = Keys.target.value / "native-bin"
+
+      if (prebuiltDir.exists() && prebuiltDir.listFiles().nonEmpty) {
+        log.log(Level.Info, "Found pre-built natives from tarball, copying...")
+        IO.copyDirectory(prebuiltDir, dir)
+      } else {
+        log.log(Level.Info, "Building natives from source...")
+        for (luajitBin <- LuaJITBuild.Keys.luajitFiles.value) {
+          log.log(Level.Info, s"Copying $luajitBin to output directory.")
+          IO.copyFile(luajitBin.file, dir / luajitBin.file.getName)
+        }
+        for (nativeBin <- NativePatchBuild.Keys.nativeVersions.value) {
+          log.log(Level.Info, s"Copying $nativeBin to output directory.")
+          IO.copyFile(nativeBin.file, dir / nativeBin.name)
+          IO.write(dir / s"${nativeBin.name}.build-id", nativeBin.buildId)
+        }
+        for (wrapperBin <- NativePatchBuild.Keys.win32Wrapper.value) {
+          log.log(Level.Info, s"Copying $wrapperBin to output directory.")
+          IO.copyFile(wrapperBin, dir / wrapperBin.getName)
+        }
       }
 
       // return directory
       dir
     },
     Keys.patchFiles := {
+      // Ensure buildDylibDir has run before we try to read .build-id files
+      Keys.buildDylibDir.value
+
       val log = streams.value.log
 
       def loadFromDir(dir: File) =

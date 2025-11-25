@@ -112,7 +112,9 @@ jobs:
         with:
           name: mppatch_ci_natives-linux.tar.gz
           path: target/mppatch_ci_natives-linux
-      - run: mv target/mppatch_ci_natives-linux/* target/
+      - run: New-Item -ItemType Directory -Force -Path target/native-bin
+        shell: pwsh
+      - run: tar -xzf target/mppatch_ci_natives-linux/mppatch_ci_natives-linux.tar.gz -C target/native-bin
       - run: rm -Recurse -Force -Verbose target/mppatch_ci_natives-linux
 
       # Do the actual build
