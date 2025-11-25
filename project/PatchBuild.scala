@@ -39,8 +39,7 @@ object PatchBuild {
       val log = streams.value.log
 
       // Check if pre-built natives exist from CI tarball (in target/native-bin)
-      val tarballNatives = (Keys.target.value / "mppatch_ci_natives-linux.tar.gz").exists()
-      val prebuiltDir = Keys.target.value / "native-bin"
+      val prebuiltDir = target.value / "native-bin"
 
       if (prebuiltDir.exists() && prebuiltDir.listFiles().nonEmpty) {
         log.log(Level.Info, "Found pre-built natives from tarball, copying...")
