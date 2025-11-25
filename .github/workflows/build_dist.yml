@@ -111,21 +111,13 @@ jobs:
       - uses: actions/download-artifact@v4
         with:
           name: mppatch_ci_natives-linux.tar.gz
-          path: target/mppatch_ci_natives-linux
-      - name: Extract native binaries tarball
+          path: target
+      - name: Verify tarball location
         shell: pwsh
         run: |
-          Write-Host "Creating target/native-bin directory..."
-          New-Item -ItemType Directory -Force -Path target/native-bin
-
-          Write-Host "Extracting tarball..."
-          tar -xzf target/mppatch_ci_natives-linux/mppatch_ci_natives-linux.tar.gz -C target/native-bin
-
-          Write-Host "Listing extracted files:"
-          Get-ChildItem -Recurse target/native-bin
-
-          Write-Host "Cleaning up download directory..."
-          Remove-Item -Recurse -Force target/mppatch_ci_natives-linux
+          Write-Host "Verifying tarball exists:"
+          Get-Item target/mppatch_ci_natives-linux.tar.gz
+          Write-Host "Tarball is ready for extraction by build script"
 
       # Do the actual build
       - uses: ilammy/msvc-dev-cmd@v1
