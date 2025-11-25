@@ -112,10 +112,20 @@ jobs:
         with:
           name: mppatch_ci_natives-linux.tar.gz
           path: target/mppatch_ci_natives-linux
-      - run: New-Item -ItemType Directory -Force -Path target/native-bin
+      - name: Extract native binaries tarball
         shell: pwsh
-      - run: tar -xzf target/mppatch_ci_natives-linux/mppatch_ci_natives-linux.tar.gz -C target/native-bin
-      - run: rm -Recurse -Force -Verbose target/mppatch_ci_natives-linux
+        run: |
+          Write-Host "Creating target/native-bin directory..."
+          New-Item -ItemType Directory -Force -Path target/native-bin
+
+          Write-Host "Extracting tarball..."
+          tar -xzf target/mppatch_ci_natives-linux/mppatch_ci_natives-linux.tar.gz -C target/native-bin
+
+          Write-Host "Listing extracted files:"
+          Get-ChildItem -Recurse target/native-bin
+
+          Write-Host "Cleaning up download directory..."
+          Remove-Item -Recurse -Force target/mppatch_ci_natives-linux
 
       # Do the actual build
       - uses: ilammy/msvc-dev-cmd@v1
