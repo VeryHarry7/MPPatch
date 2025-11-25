@@ -29,41 +29,47 @@ import scala.xml.*
 object PatchBuild {
   val settings = Seq(
     Keys.nativesDir := crossTarget.value / "native-bin",
-    Keys.buildDylibDir := {
-      // create the native-patch directory
-      val dir = Keys.nativesDir.value
-      IO.delete(dir)
-      IO.createDirectory(dir)
-
-      // copy native-patch files to the directory
-      val log = streams.value.log
-
+    Keys.buildDylibDir := Def.taskDyn {
       // Check if pre-built natives exist from CI tarball (in target/native-bin)
       val prebuiltDir = target.value / "native-bin"
+      val log = streams.value.log
 
-      if (prebuiltDir.exists() && prebuiltDir.listFiles().nonEmpty) {
-        log.log(Level.Info, "Found pre-built natives from tarball, copying...")
-        IO.copyDirectory(prebuiltDir, dir)
+      if (prebuiltDir.exists() && prebuiltDir.listFiles() != null && prebuiltDir.listFiles().nonEmpty) {
+        log.log(Level.Info, s"Found pre-built natives in $prebuiltDir, will use those...")
+        // Return a task that just copies pre-built files (no native build dependencies)
+        Def.task {
+          val dir = Keys.nativesDir.value
+          IO.delete(dir)
+          IO.createDirectory(dir)
+          log.log(Level.Info, "Copying pre-built natives from tarball...")
+          IO.copyDirectory(prebuiltDir, dir)
+          dir
+        }
       } else {
-        log.log(Level.Info, "Building natives from source...")
-        for (luajitBin <- LuaJITBuild.Keys.luajitFiles.value) {
-          log.log(Level.Info, s"Copying $luajitBin to output directory.")
-          IO.copyFile(luajitBin.file, dir / luajitBin.file.getName)
-        }
-        for (nativeBin <- NativePatchBuild.Keys.nativeVersions.value) {
-          log.log(Level.Info, s"Copying $nativeBin to output directory.")
-          IO.copyFile(nativeBin.file, dir / nativeBin.name)
-          IO.write(dir / s"${nativeBin.name}.build-id", nativeBin.buildId)
-        }
-        for (wrapperBin <- NativePatchBuild.Keys.win32Wrapper.value) {
-          log.log(Level.Info, s"Copying $wrapperBin to output directory.")
-          IO.copyFile(wrapperBin, dir / wrapperBin.getName)
+        log.log(Level.Info, "No pre-built natives found, will build from source...")
+        // Return a task that builds from source (with native build dependencies)
+        Def.task {
+          val dir = Keys.nativesDir.value
+          IO.delete(dir)
+          IO.createDirectory(dir)
+          log.log(Level.Info, "Building natives from source...")
+          for (luajitBin <- LuaJITBuild.Keys.luajitFiles.value) {
+            log.log(Level.Info, s"Copying $luajitBin to output directory.")
+            IO.copyFile(luajitBin.file, dir / luajitBin.file.getName)
+          }
+          for (nativeBin <- NativePatchBuild.Keys.nativeVersions.value) {
+            log.log(Level.Info, s"Copying $nativeBin to output directory.")
+            IO.copyFile(nativeBin.file, dir / nativeBin.name)
+            IO.write(dir / s"${nativeBin.name}.build-id", nativeBin.buildId)
+          }
+          for (wrapperBin <- NativePatchBuild.Keys.win32Wrapper.value) {
+            log.log(Level.Info, s"Copying $wrapperBin to output directory.")
+            IO.copyFile(wrapperBin, dir / wrapperBin.getName)
+          }
+          dir
         }
       }
-
-      // return directory
-      dir
-    },
+    }.value,
     Keys.patchFiles := {
       // Ensure buildDylibDir has run before we try to read .build-id files
       Keys.buildDylibDir.value
